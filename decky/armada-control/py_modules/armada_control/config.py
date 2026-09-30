@@ -8,6 +8,7 @@ from .system import (
     bottom_screen_brightness,
     bottom_screen_active,
     bottom_screen_enabled,
+    charge_limit,
     device_env,
     mtp_enabled,
     os_version,
@@ -24,6 +25,7 @@ def build_config(include_games=True):
     fex_contract = load_fex_contract()
     env = device_env()
     secondary_brightness = bottom_screen_brightness()
+    battery_charge_limit = charge_limit()
     power = parse_power()
     return {
         "power": power,
@@ -51,6 +53,8 @@ def build_config(include_games=True):
         "bottomScreenActive": bottom_screen_active(),
         "bottomScreenBrightness": secondary_brightness or 0,
         "chargingFanPwm": int(power["fan"].get("charging_pwm", 0)),
+        "batteryChargeLimitSupported": battery_charge_limit is not None,
+        "batteryChargeLimit": battery_charge_limit or 100,
         "sshEnabled": ssh_enabled(),
         "mtpEnabled": mtp_enabled(),
         "desktopMode": desktop_mode(),

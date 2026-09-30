@@ -19,6 +19,7 @@ from armada_control.system import (
     set_abl_auto_enabled,
     set_bottom_screen_brightness,
     set_bottom_screen_enabled,
+    set_charge_limit,
     get_sleep_logs_enabled,
     set_mtp_enabled,
     set_desktop_mode,
@@ -70,6 +71,9 @@ class Plugin:
 
     async def set_bottom_screen_brightness(self, brightness):
         return await asyncio.to_thread(set_bottom_screen_brightness, brightness)
+
+    async def set_charge_limit(self, limit):
+        return await asyncio.to_thread(set_charge_limit, limit)
 
     async def get_bottom_screen_active(self):
         return await asyncio.to_thread(bottom_screen_active)

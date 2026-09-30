@@ -130,6 +130,8 @@ export interface Config {
   bottomScreenActive: boolean;
   bottomScreenBrightness: number;
   chargingFanPwm: number;
+  batteryChargeLimitSupported: boolean;
+  batteryChargeLimit: number;
   sshEnabled: boolean;
   mtpEnabled: boolean;
   desktopMode: string;

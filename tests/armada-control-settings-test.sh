@@ -253,6 +253,10 @@ def fake_plugin_call(action, **payload):
         return {"supported": True, "brightness": 50, "active": True}
     if action == "set_bottom_screen_brightness":
         return {"brightness": int(payload["brightness"])}
+    if action == "get_charge_limit":
+        return {"supported": True, "limit": 85}
+    if action == "set_charge_limit":
+        return {"limit": int(payload["limit"])}
     return {"enabled": action == "get_bottom_screen_enabled" or bool(payload.get("enabled"))}
 
 
@@ -262,6 +266,17 @@ assert plugin_system.set_bottom_screen_enabled(True)
 assert plugin_system.bottom_screen_brightness() == 50
 assert plugin_system.bottom_screen_active()
 assert plugin_system.set_bottom_screen_brightness(40) == 40
+assert plugin_system.charge_limit() == 85
+assert plugin_system.set_charge_limit(75) == 75
+
+
+def failing_plugin_call(action, **payload):
+    raise RuntimeError("armada-control is unavailable")
+
+
+plugin_system.call = failing_plugin_call
+assert plugin_system.charge_limit() is None
+plugin_system.call = fake_plugin_call
 
 plugin_system.MEM_SLEEP_PATH = control.MEM_SLEEP_PATH
 assert plugin_system.sleep_modes() == [

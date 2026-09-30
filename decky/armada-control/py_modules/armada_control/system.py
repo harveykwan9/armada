@@ -150,6 +150,20 @@ def set_bottom_screen_brightness(brightness):
     return int(call("set_bottom_screen_brightness", brightness=brightness).get("brightness", 0))
 
 
+def charge_limit():
+    try:
+        result = call("get_charge_limit")
+        if result.get("supported"):
+            return int(result.get("limit", 100))
+    except Exception:
+        pass
+    return None
+
+
+def set_charge_limit(limit):
+    return int(call("set_charge_limit", limit=limit).get("limit", 100))
+
+
 def desktop_mode() -> str:
     try:
         value = str(call("get_desktop_mode").get("value", ""))

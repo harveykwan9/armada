@@ -9,6 +9,7 @@ import {
   setAblAutoEnabled as applyAblAutoEnabled,
   setBottomScreenBrightness as applyBottomScreenBrightness,
   setBottomScreenEnabled as applyBottomScreenEnabled,
+  setChargeLimit as applyChargeLimit,
   setChargingFanPwm as applyChargingFanPwm,
   setControllerType as applyControllerType,
   setMtpEnabled as applyMtpEnabled,
@@ -27,6 +28,7 @@ import type { Config } from "../types";
 const BOTTOM_SCREEN_BRIGHTNESS_DELAY_MS: number = 150;
 // Each apply reloads armada-powerd.
 const CHARGING_FAN_DELAY_MS: number = 500;
+const CHARGE_LIMIT_DELAY_MS: number = 150;
 
 export function Settings({ config, setConfig }: {
   config: Config;
@@ -47,6 +49,13 @@ export function Settings({ config, setConfig }: {
     applyChargingFanPwm,
     t("settings.chargingFanSpeedError"),
     CHARGING_FAN_DELAY_MS,
+  );
+  const setChargeLimit = useDebouncedApply(
+    async () => (await getConfig()).batteryChargeLimit,
+    (value) => setConfig((current) => (current ? { ...current, batteryChargeLimit: value } : current)),
+    applyChargeLimit,
+    t("settings.chargeLimitError"),
+    CHARGE_LIMIT_DELAY_MS,
   );
 
   useEffect(() => {
@@ -226,6 +235,18 @@ export function Settings({ config, setConfig }: {
             max={100}
             step={1}
             onChange={(percent) => setChargingFanPwm(percentToPwm(percent))}
+          />
+        )}
+        {config.batteryChargeLimitSupported && (
+          <SliderEdit
+            label={t("settings.chargeLimit")}
+            description={t(config.batteryChargeLimit >= 100 ? "settings.chargeLimitOff" : "settings.chargeLimitDescription")}
+            value={config.batteryChargeLimit}
+            min={55}
+            max={100}
+            step={5}
+            valueSuffix="%"
+            onChange={setChargeLimit}
           />
         )}
         {(config.desktopModes?.length || 0) > 1 && (
