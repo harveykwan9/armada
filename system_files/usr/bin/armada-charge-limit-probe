@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+set -uo pipefail
+
+exec /usr/bin/python3 "${ARMADA_CHARGE_LIMIT_LIB:-/usr/lib/armada/armada_charge_limit.py}" "$@"
