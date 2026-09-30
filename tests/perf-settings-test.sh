@@ -624,6 +624,57 @@ finally:
     ap.apply_gamescope = real_apply
 check("perf_tick contains exceptions", True)
 
+# --- armada-powerd: charge limit is re-applied on resume only ----------------
+import contextlib
+import io
+
+
+class SleepSignal:
+    def __init__(self, going_to_sleep):
+        self.going_to_sleep = going_to_sleep
+
+    def unpack(self):
+        return (self.going_to_sleep,)
+
+
+resume = powerd.ArmadaPower.__new__(powerd.ArmadaPower)
+resume.gpu_level = "auto"
+resume.manual_gpu_clock = 0
+resume.apply_profile = lambda: None
+restores = []
+real_restore = powerd.armada_charge_limit.restore
+powerd.armada_charge_limit.restore = lambda: restores.append("restore") or (True, None)
+try:
+    resume.handle_prepare_for_sleep(None, None, None, None, None, SleepSignal(True))
+    check("charge limit not restored when going to sleep", restores == [])
+    resume.handle_prepare_for_sleep(None, None, None, None, None, SleepSignal(False))
+    check("charge limit restored on resume", restores == ["restore"])
+    powerd.armada_charge_limit.restore = lambda: (True, (100, 95))
+    real_saved_limit = powerd.armada_charge_limit.saved_limit
+    powerd.armada_charge_limit.saved_limit = lambda: 80
+    log = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(log):
+            resume.handle_prepare_for_sleep(None, None, None, None, None, SleepSignal(False))
+    finally:
+        powerd.armada_charge_limit.saved_limit = real_saved_limit
+    check("charge limit drift across suspend is logged",
+          "armada-powerd: charge limit drifted across suspend to end=100 start=95; restored 80" in log.getvalue())
+    powerd.armada_charge_limit.restore = lambda: (False, None)
+    log = io.StringIO()
+    with contextlib.redirect_stderr(log):
+        resume.handle_prepare_for_sleep(None, None, None, None, None, SleepSignal(False))
+    check("charge limit not-ready resume is logged",
+          "charge limit restore skipped: battery not ready" in log.getvalue())
+    powerd.armada_charge_limit.restore = lambda: (_ for _ in ()).throw(RuntimeError("EAGAIN"))
+    log = io.StringIO()
+    with contextlib.redirect_stderr(log):
+        resume.handle_prepare_for_sleep(None, None, None, None, None, SleepSignal(False))
+    check("charge limit restore failure is logged",
+          "armada-powerd: charge limit restore failed: EAGAIN" in log.getvalue())
+finally:
+    powerd.armada_charge_limit.restore = real_restore
+
 # --- plugin: tweaks sanitize keeps the flat perf keys -----------------------
 sys.path.insert(0, os.path.join(ROOT, "decky/armada-control/py_modules"))
 from armada_control import tweaks as plugin_tweaks

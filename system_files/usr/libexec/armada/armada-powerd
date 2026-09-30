@@ -12,6 +12,7 @@ import warnings
 from pathlib import Path
 
 sys.path.insert(0, "/usr/lib/armada")
+import armada_charge_limit
 import armada_perf
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -1104,6 +1105,19 @@ class ArmadaPower:
             self.apply_profile()
             if self.gpu_level == "manual" and self.manual_gpu_clock:
                 self.set_gpu_manual_clock(self.manual_gpu_clock)
+            # Re-apply in case the charger firmware drops the limit across
+            # suspend. Not seen on hardware yet; the drift line below will
+            # show up in testers' journals if it ever happens.
+            try:
+                ready, previous = armada_charge_limit.restore()
+                if not ready:
+                    print("armada-powerd: charge limit restore skipped: battery not ready", file=sys.stderr)
+                elif previous:
+                    end, start = (armada_charge_limit.show(value) for value in previous)
+                    print(f"armada-powerd: charge limit drifted across suspend to end={end} start={start}; "
+                          f"restored {armada_charge_limit.saved_limit()}", file=sys.stderr)
+            except RuntimeError as exc:
+                print(f"armada-powerd: charge limit restore failed: {exc}", file=sys.stderr)
 
 
 def main():

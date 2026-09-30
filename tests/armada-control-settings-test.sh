@@ -156,6 +156,94 @@ except RuntimeError:
 else:
     raise AssertionError("unsupported bottom-screen brightness was changed")
 
+
+charge_limit = control.armada_charge_limit
+charge_limit.SYS = work / "sys"
+charge_limit.SAVED = work / "charge-limit"
+battery = charge_limit.SYS / "class/power_supply/battery"
+battery.mkdir(parents=True)
+(battery / "type").write_text("Battery\n")
+threshold = battery / "charge_control_end_threshold"
+assert control.action_get_charge_limit({}) == {"supported": False, "limit": 100}
+try:
+    control.action_set_charge_limit({"limit": 80})
+except RuntimeError:
+    pass
+else:
+    raise AssertionError("unsupported charge limit was changed")
+
+# The daemon runs as root, so a read-only attribute must be caught by its mode bits.
+threshold.write_text("100\n")
+threshold.chmod(0o444)
+assert control.action_get_charge_limit({}) == {"supported": False, "limit": 100}
+threshold.chmod(0o644)
+
+assert control.action_get_charge_limit({}) == {"supported": True, "limit": 100}
+assert control.action_set_charge_limit({"limit": 80}) == {"limit": 80}
+assert threshold.read_text() == "80\n"
+assert charge_limit.SAVED.read_text() == "80\n"
+assert control.action_get_charge_limit({}) == {"supported": True, "limit": 80}
+for invalid in (None, True, "80", 45, 50, 82, 105):
+    try:
+        control.action_set_charge_limit({"limit": invalid})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid charge limit was accepted")
+assert charge_limit.SAVED.read_text() == "80\n"
+
+# Startup restore retries quietly while battmgr answers EAGAIN, logs only the
+# first write failure, then logs what it replaced.
+import contextlib
+import io
+
+threshold.write_text("100\n")
+threshold.chmod(0o444)
+restore = control.ChargeLimitRestore()
+restore.tick()
+assert restore.pending and threshold.read_text() == "100\n"
+threshold.chmod(0o644)
+real_read_limit = charge_limit.read_limit
+charge_limit.read_limit = lambda battery: None
+log = io.StringIO()
+try:
+    with contextlib.redirect_stderr(log):
+        restore.tick()
+finally:
+    charge_limit.read_limit = real_read_limit
+assert restore.pending and log.getvalue() == "" and threshold.read_text() == "100\n"
+real_write_text = pathlib.Path.write_text
+pathlib.Path.write_text = lambda self, *args, **kwargs: (_ for _ in ()).throw(OSError(11, "EAGAIN"))
+try:
+    with contextlib.redirect_stderr(log):
+        restore.tick()
+        restore.tick()
+finally:
+    pathlib.Path.write_text = real_write_text
+assert restore.pending
+assert log.getvalue().count("charge limit restore failed") == 1, log.getvalue()
+with contextlib.redirect_stderr(log):
+    restore.tick()
+assert not restore.pending and threshold.read_text() == "80\n"
+assert "armada-control: charge limit was end=100 start=none at startup; restored 80" in log.getvalue()
+restore.tick()
+
+restore = control.ChargeLimitRestore()
+log = io.StringIO()
+with contextlib.redirect_stderr(log):
+    restore.tick()
+assert not restore.pending and log.getvalue() == ""
+
+threshold.write_text("100\n")
+threshold.chmod(0o444)
+restore = control.ChargeLimitRestore()
+restore.deadline = 0
+log = io.StringIO()
+with contextlib.redirect_stderr(log):
+    restore.tick()
+assert not restore.pending and "gave up restoring the charge limit: battery not ready" in log.getvalue()
+threshold.chmod(0o644)
+
 plugin_lib = root / "decky/armada-control/py_modules"
 sys.path.insert(0, str(plugin_lib))
 from armada_control import system as plugin_system
